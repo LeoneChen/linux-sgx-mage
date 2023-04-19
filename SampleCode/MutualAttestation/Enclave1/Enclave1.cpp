@@ -29,47 +29,68 @@
  *
  */
 
-#include "section.h"
 
-#include <string.h>
-#include <stdlib.h>
+// Enclave1.cpp : Defines the exported functions for the .so application
+#include "sgx_eid.h"
+#include "Enclave1_t.h"
 
-Section::Section(const uint8_t* start_addr, uint64_t size, uint64_t virt_size,
-                 uint64_t rva, int64_t offset, si_flags_t sf)
-    :m_start_addr(start_addr), m_raw_data_size(size), m_rva(rva), m_offset(offset),
-     m_virtual_size(virt_size), m_si_flag(sf)
-{}
+#include <stdarg.h>
+#include <stdio.h>      /* vsnprintf */
 
-Section::~Section()
+#include "sgx_utils.h"
+#include "sgx_trts.h"
+#include "sgx_tseal.h"
+#include "sgx_mage.h"
+
+/* 
+ * printf: 
+ *   Invokes OCALL to display the enclave buffer to the terminal.
+ */
+void printf(const char *fmt, ...)
 {
+    char buf[BUFSIZ] = {'\0'};
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, BUFSIZ, fmt, ap);
+    va_end(ap);
+    e1_ocall_print_string(buf);
 }
 
-const uint8_t* Section::raw_data(void) const
+sgx_status_t print_measurement()
 {
-    return m_start_addr;
+    sgx_status_t ret = SGX_SUCCESS;
+    sgx_target_info_t target_info = {};
+    sgx_report_t report;
+    sgx_report_data_t report_data = {{0}};
+    ret = sgx_create_report(&target_info, &report_data, &report);
+    if (ret != SGX_SUCCESS) printf("ERROR get report %x\n", ret);
+    else {
+        for(int i = 0; i < 32; i++) printf("%02x", report.body.mr_enclave.m[i]);
+        printf("\n");
+    }
+    return ret;
 }
 
-uint64_t Section::raw_data_size(void) const
+uint32_t e1_ecall_main()
 {
-    return m_raw_data_size;
-}
+    uint32_t ret = 0;
 
-uint64_t Section::get_rva(void) const
-{
-    return m_rva;
-}
+    printf("Enclave measurement:\n");
+    print_measurement();
+    
+    uint64_t mage_size = sgx_mage_get_size();
+    printf("MAGE has %lu entries:\n", mage_size);
+    sgx_measurement_t mr;
+    for (uint64_t i = 0; i < mage_size; i++) {
+        printf("Entry %d:\n", i);
+        if (SGX_SUCCESS != sgx_mage_derive_measurement(i, &mr)) {
+            printf("failed to generate mage measurement\n");
+            continue;
+        }
+        for (uint64_t j = 0; j < sizeof(mr.m); j++)
+            printf("%02x", mr.m[j]);
+        printf("\n");
+    }
 
-uint64_t Section::get_offset(void) const
-{
-    return m_offset;
-}
-
-uint64_t Section::virtual_size(void) const
-{
-    return m_virtual_size;
-}
-
-si_flags_t Section::get_si_flags(void) const
-{
-    return m_si_flag;
+    return ret;
 }

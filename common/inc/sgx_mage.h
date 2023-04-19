@@ -29,47 +29,39 @@
  *
  */
 
-#include "section.h"
 
-#include <string.h>
-#include <stdlib.h>
+#ifndef _SGX_MAGE_H_
+#define _SGX_MAGE_H_
 
-Section::Section(const uint8_t* start_addr, uint64_t size, uint64_t virt_size,
-                 uint64_t rva, int64_t offset, si_flags_t sf)
-    :m_start_addr(start_addr), m_raw_data_size(size), m_rva(rva), m_offset(offset),
-     m_virtual_size(virt_size), m_si_flag(sf)
-{}
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-Section::~Section()
+#define SGX_MAGE_SEC_NAME ".sgx_mage"
+#define SGX_MAGE_SEC_SIZE 4096
+// must be a multiple of 4096 (page size)
+
+typedef struct _sgx_mage_entry_t
 {
-}
+    uint64_t size;              // number of blocks updated
+    uint64_t offset;            // offset of sgx_mage section
+    uint8_t digest[32];         // sha-256 internal state
+} sgx_mage_entry_t;
 
-const uint8_t* Section::raw_data(void) const
+typedef struct _sgx_mage_t
 {
-    return m_start_addr;
-}
+    uint64_t size;
+    sgx_mage_entry_t entries[];
+} sgx_mage_t;
 
-uint64_t Section::raw_data_size(void) const
-{
-    return m_raw_data_size;
-}
+uint64_t sgx_mage_get_size();
 
-uint64_t Section::get_rva(void) const
-{
-    return m_rva;
-}
+sgx_status_t sgx_mage_derive_measurement(uint64_t mage_idx, sgx_measurement_t *mr);
 
-uint64_t Section::get_offset(void) const
-{
-    return m_offset;
-}
+uint8_t* get_sgx_mage_sec_buf_addr();
 
-uint64_t Section::virtual_size(void) const
-{
-    return m_virtual_size;
+#ifdef __cplusplus
 }
+#endif
 
-si_flags_t Section::get_si_flags(void) const
-{
-    return m_si_flag;
-}
+#endif
